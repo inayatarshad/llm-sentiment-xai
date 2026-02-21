@@ -1,0 +1,9 @@
+transformers
+torch
+langchain
+langchain-core
+langchain-google-genai
+google-generativeai
+streamlit
+python-dotenv
+langchain-huggingface
