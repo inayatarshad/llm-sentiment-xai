@@ -7,9 +7,9 @@ import os
 from dotenv import load_dotenv
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 import torch
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate
+from langchain_groq import ChatGroq
+from langchain_core.output_parsers import StrOutputParser
 
 load_dotenv()
 
@@ -59,7 +59,7 @@ class SentimentAnalyzer:
         return [self.analyze(t) for t in texts]
 
 
-# ── 2. Explainable Summarization (LangChain + Gemini) ────────────────────────
+# ── 2. Explainable Summarization (LangChain + Groq) ────────────────────────
 class ExplainableSummarizer:
     SUMMARY_TEMPLATE = """You are an expert NLP assistant. Given the following text, provide:
 1. A concise summary (2-3 sentences)
@@ -77,21 +77,20 @@ TONE: <tone>
 EXPLANATION: <why this tone>"""
 
     def __init__(self):
-        print("🔄 Loading Gemini summarization model...")
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            temperature=0.3,
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
-        )
+        print("🔄 Loading Grok summarization model ...")
+        self.llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0.3,
+)
         self.prompt = PromptTemplate(
             input_variables=["text"],
             template=self.SUMMARY_TEMPLATE,
         )
-        self.chain = LLMChain(llm=self.llm, prompt=self.prompt)
-        print("✅ Summarizer ready.\n")
+        self.chain = self.prompt | self.llm | StrOutputParser()
+
 
     def summarize(self, text: str) -> dict:
-        raw = self.chain.invoke({"text": text})["text"]
+        raw = self.chain.invoke({"text": text})
         parsed = {}
         for line in raw.strip().split("\n"):
             if line.startswith("SUMMARY:"):
@@ -132,7 +131,7 @@ class NLPPipeline:
         print(f"  Confidence  : {s['confidence']}")
         print()
         print("=" * 60)
-        print("📝 EXPLAINABLE SUMMARY  (Gemini)")
+        print("📝 EXPLAINABLE SUMMARY  (Groq)")
         print("=" * 60)
         print(f"  Summary     : {m.get('summary', 'N/A')}")
         print(f"  Themes      : {', '.join(m.get('themes', []))}")
@@ -144,7 +143,7 @@ class NLPPipeline:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 60)
-    print("   🧠 Explainable NLP Pipeline  |  BERT + Gemini")
+    print("   🧠 Explainable NLP Pipeline  |  BERT + Groq")
     print("=" * 60)
 
     pipeline_obj = NLPPipeline()
