@@ -16,7 +16,9 @@ Paste text in any supported language and receive:
 
 ## Demo
 
-[Open the live NLP // CORE demo](https://llm-sentiment-xai.vercel.app)
+### [Launch NLP // CORE →](https://llm-sentiment-xai.vercel.app)
+
+Try the deployed application directly in your browser—no local installation required.
 
 ## How it works
 
@@ -75,9 +77,9 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Open
 streamlit run streamlit_app.py
 ```
 
-The app will be available at <http://localhost:8501>. The BERT model downloads
-from Hugging Face on the first run, so initial startup is slower than subsequent
-runs.
+Streamlit opens the application automatically in your browser. The BERT model
+downloads from Hugging Face on the first run, so initial startup is slower than
+subsequent runs.
 
 ## Docker
 
@@ -86,7 +88,7 @@ docker build -t nlp-core .
 docker run --rm -p 8501:8501 -e GROQ_API_KEY=your_key_here nlp-core
 ```
 
-Then open <http://localhost:8501>.
+Docker prints the local application address when the container is ready.
 
 ## Project structure
 
