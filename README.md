@@ -16,7 +16,7 @@ Paste text in any supported language and receive:
 
 ## Demo
 
-> A public demo URL will be added here after deployment.
+[Open the live NLP // CORE demo](https://llm-sentiment-xai.vercel.app)
 
 ## How it works
 
@@ -64,7 +64,7 @@ source .venv/bin/activate
 Install dependencies and configure the API key:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 cp .env.example .env
 ```
 
@@ -72,7 +72,7 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Open
 `.env`, replace the placeholder value, and start the app:
 
 ```bash
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 The app will be available at <http://localhost:8501>. The BERT model downloads
@@ -92,9 +92,10 @@ Then open <http://localhost:8501>.
 
 | Path | Purpose |
 | --- | --- |
-| `app.py` | Streamlit interface, presentation, and error handling |
+| `app.py` | Lightweight WSGI entrypoint for the Vercel-hosted edition |
+| `streamlit_app.py` | Full local Streamlit interface |
 | `nlp_pipeline.py` | BERT classification and Groq summarization pipeline |
-| `requirements.txt` | Runtime dependencies |
+| `requirements-local.txt` | Local/Streamlit runtime dependencies |
 | `Dockerfile` | Reproducible container deployment |
 | `*_chain.py`, `*_parser.py` | Small LangChain learning examples |
 

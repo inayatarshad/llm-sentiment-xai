@@ -1,262 +1,85 @@
-"""
-Streamlit UI — Explainable NLP Pipeline
-Run: streamlit run app.py
-"""
+"""Dependency-free WSGI app for the Vercel-hosted NLP // CORE demo."""
 
-from html import escape
+import json
+import os
+import urllib.error
+import urllib.request
 
-import streamlit as st
-from nlp_pipeline import NLPPipeline
+HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>NLP // CORE</title><style>
+*{box-sizing:border-box}body{margin:0;background:#08080e;color:#d8d8ec;font:16px ui-monospace,Consolas,monospace}
+main{width:min(820px,92%);margin:6vh auto}h1{font:900 clamp(2.2rem,7vw,4.6rem) Arial;margin:.2rem 0;
+background:linear-gradient(90deg,#00ff8c,#b400ff);color:transparent;background-clip:text}p{color:#8585a2;line-height:1.6}
+.eyebrow{color:#00ff8c;letter-spacing:.2em;font-size:.75rem}textarea{width:100%;min-height:190px;margin:1.5rem 0 .8rem;
+padding:1rem;background:#0d0d18;color:#e8e8ff;border:1px solid #00ff8c55;border-radius:8px;resize:vertical;font:inherit}
+button{background:#00ff8c;color:#07130d;border:0;border-radius:6px;padding:.8rem 1.3rem;font:bold .85rem Arial;letter-spacing:.12em;cursor:pointer}
+button:disabled{opacity:.5}.status{min-height:2rem;margin:1rem 0;color:#00ff8c}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
+.card{background:#0d0d18;border:1px solid #b400ff44;border-left:3px solid #b400ff;border-radius:6px;padding:1rem;margin:.7rem 0}
+.card span{display:block;color:#b400ff;font-size:.7rem;letter-spacing:.15em;margin-bottom:.5rem}.wide{grid-column:1/-1}
+.note{font-size:.78rem}.error{color:#ff6b8a}@media(max-width:620px){.grid{grid-template-columns:1fr}}
+</style></head><body><main><div class="eyebrow">EXPLAINABLE SENTIMENT INTELLIGENCE</div><h1>NLP // CORE</h1>
+<p>Analyze sentiment, confidence, themes, tone, and the reasoning behind them in one pass.</p>
+<textarea id="text" maxlength="12000" placeholder="Paste text to analyze..."></textarea><button id="run">ANALYZE</button>
+<div class="status" id="status"></div><section class="grid" id="results" hidden>
+<div class="card"><span>SENTIMENT</span><b id="sentiment"></b></div><div class="card"><span>POLARITY</span><b id="polarity"></b></div>
+<div class="card"><span>CONFIDENCE</span><b id="confidence"></b></div><div class="card wide"><span>SUMMARY</span><div id="summary"></div></div>
+<div class="card"><span>TONE</span><div id="tone"></div></div><div class="card"><span>THEMES</span><div id="themes"></div></div>
+<div class="card wide"><span>WHY</span><div id="explanation"></div></div></section>
+<p class="note">Hosted analysis uses Groq GPT-OSS. The repository's Streamlit edition uses multilingual BERT locally.</p>
+</main><script>const $=id=>document.getElementById(id),run=$("run"),status=$("status"),results=$("results");
+run.onclick=async()=>{const text=$("text").value.trim();if(!text){status.textContent="Enter some text first.";return}
+run.disabled=true;status.className="status";status.textContent="Analyzing…";results.hidden=true;
+try{const r=await fetch("/api/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text})});
+const d=await r.json();if(!r.ok)throw Error(d.error||"Analysis failed");
+for(const k of["sentiment","polarity","confidence","summary","tone","explanation"])$(k).textContent=d[k]||"—";
+$("themes").textContent=(d.themes||[]).join(" · ");results.hidden=false;status.textContent="Analysis complete."}
+catch(e){status.className="status error";status.textContent=e.message}finally{run.disabled=false}};</script></body></html>"""
 
-st.set_page_config(page_title="NLP//CORE", page_icon="⚡", layout="centered")
-
-# ── Neon Cyberpunk CSS ─────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
-
-/* Background */
-.stApp {
-    background: #0a0a0f;
-    background-image:
-        radial-gradient(ellipse at 20% 50%, rgba(0, 255, 140, 0.04) 0%, transparent 60%),
-        radial-gradient(ellipse at 80% 20%, rgba(180, 0, 255, 0.06) 0%, transparent 60%);
-    font-family: 'Share Tech Mono', monospace;
-}
-
-/* Hide default streamlit elements */
-#MainMenu, footer, header {visibility: hidden;}
-.block-container {padding-top: 2rem; max-width: 780px;}
-
-/* Title */
-h1 {
-    font-family: 'Orbitron', monospace !important;
-    font-weight: 900 !important;
-    font-size: 2.4rem !important;
-    background: linear-gradient(90deg, #00ff8c, #b400ff, #00ff8c);
-    background-size: 200%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: shimmer 3s linear infinite;
-    letter-spacing: 0.05em;
-    margin-bottom: 0 !important;
-}
-
-@keyframes shimmer {
-    0% { background-position: 0% }
-    100% { background-position: 200% }
-}
-
-/* Caption */
-.stApp p, .stApp .stCaption {
-    color: #555577 !important;
-    font-family: 'Share Tech Mono', monospace !important;
-}
-
-/* Text area */
-.stTextArea textarea {
-    background: #0d0d18 !important;
-    border: 1px solid #00ff8c33 !important;
-    border-radius: 4px !important;
-    color: #00ff8c !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.9rem !important;
-    caret-color: #00ff8c;
-}
-.stTextArea textarea:focus {
-    border-color: #00ff8c !important;
-    box-shadow: 0 0 12px rgba(0,255,140,0.2) !important;
-}
-.stTextArea textarea::placeholder { color: #333355 !important; }
-.stTextArea label { color: #666688 !important; font-family: 'Share Tech Mono', monospace !important; }
-
-/* Button */
-.stButton > button {
-    background: transparent !important;
-    border: 1px solid #00ff8c !important;
-    color: #00ff8c !important;
-    font-family: 'Orbitron', monospace !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.1em !important;
-    font-size: 0.85rem !important;
-    padding: 0.6rem 2rem !important;
-    border-radius: 2px !important;
-    transition: all 0.2s !important;
-}
-.stButton > button:hover {
-    background: rgba(0,255,140,0.08) !important;
-    box-shadow: 0 0 20px rgba(0,255,140,0.3) !important;
-}
-
-/* Metrics */
-[data-testid="metric-container"] {
-    background: #0d0d18 !important;
-    border: 1px solid #b400ff44 !important;
-    border-radius: 4px !important;
-    padding: 1rem !important;
-}
-[data-testid="metric-container"] label {
-    color: #b400ff !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.15em !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #e0e0ff !important;
-    font-family: 'Orbitron', monospace !important;
-    font-size: 1.1rem !important;
-}
-
-/* Divider */
-hr {
-    border-color: #1a1a2e !important;
-    margin: 1.5rem 0 !important;
-}
-
-/* Result boxes */
-.result-box {
-    background: #0d0d18;
-    border: 1px solid #b400ff33;
-    border-left: 3px solid #b400ff;
-    border-radius: 4px;
-    padding: 1rem 1.2rem;
-    margin: 0.6rem 0;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.88rem;
-    color: #c0c0e0;
-    line-height: 1.6;
-}
-.result-box .label {
-    color: #b400ff;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    margin-bottom: 0.4rem;
-    font-family: 'Orbitron', monospace;
-}
-.result-box.green {
-    border-left-color: #00ff8c;
-}
-.result-box.green .label { color: #00ff8c; }
-
-.theme-tag {
-    display: inline-block;
-    background: rgba(180,0,255,0.1);
-    border: 1px solid #b400ff44;
-    color: #b400ff;
-    padding: 0.15rem 0.6rem;
-    border-radius: 2px;
-    font-size: 0.78rem;
-    margin: 0.2rem 0.15rem;
-    font-family: 'Share Tech Mono', monospace;
-}
-
-.section-header {
-    font-family: 'Orbitron', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.25em;
-    color: #444466;
-    margin: 1.5rem 0 0.8rem 0;
-    border-bottom: 1px solid #1a1a2e;
-    padding-bottom: 0.4rem;
-}
-
-/* Spinner */
-.stSpinner > div { border-top-color: #00ff8c !important; }
-</style>
-""", unsafe_allow_html=True)
-
-# ── Header ─────────────────────────────────────────────────────────────────────
-st.title("NLP // CORE")
-st.caption("▸ BERT SENTIMENT  ·  GROQ GPT-OSS  ·  LANGCHAIN")
-
-st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
-
-# ── Load Pipeline ──────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
-def load_pipeline():
-    return NLPPipeline()
+PROMPT = """Analyze the text. Return only valid JSON with these keys: sentiment
+(Very Negative, Negative, Neutral, Positive, or Very Positive), polarity
+(negative, neutral, or positive), confidence (a percentage string), summary
+(2 concise sentences), themes (array of 2-5 short strings), tone, and explanation
+(one concise sentence). Text:\n"""
 
 
-if "pipeline" not in st.session_state:
-    with st.spinner("INITIALIZING MODELS..."):
-        try:
-            st.session_state.pipeline = load_pipeline()
-        except Exception as exc:
-            st.error(f"Could not initialize the NLP pipeline: {exc}")
-            st.info("Configure GROQ_API_KEY, then restart the app.")
-            st.stop()
+def _response(start_response, status, body, content_type="application/json"):
+    payload = body if isinstance(body, bytes) else body.encode("utf-8")
+    start_response(status, [("Content-Type", f"{content_type}; charset=utf-8"),
+                            ("Content-Length", str(len(payload))), ("Cache-Control", "no-store")])
+    return [payload]
 
-# ── Input ──────────────────────────────────────────────────────────────────────
-text = st.text_area(
-    "[ INPUT TEXT ]",
-    height=180,
-    placeholder="paste text to analyze...",
-    max_chars=12_000,
-    label_visibility="visible"
-)
 
-col_btn, col_space = st.columns([1, 3])
-with col_btn:
-    analyze = st.button("▶  ANALYZE", type="primary", use_container_width=True)
-
-# ── Run & Display ──────────────────────────────────────────────────────────────
-if analyze and text.strip():
+def application(environ, start_response):
+    path, method = environ.get("PATH_INFO", "/"), environ.get("REQUEST_METHOD")
+    if path == "/" and method == "GET":
+        return _response(start_response, "200 OK", HTML, "text/html")
+    if path != "/api/analyze" or method != "POST":
+        return _response(start_response, "404 Not Found", '{"error":"Not found"}')
     try:
-        with st.spinner("PROCESSING..."):
-            result = st.session_state.pipeline.run(text)
-    except Exception as exc:
-        st.error(f"Analysis failed: {exc}")
-        st.stop()
-
-    s = result["sentiment"]
-    m = result["summary"]
-
-    # Sentiment metrics
-    st.markdown("<div class='section-header'>// SENTIMENT ANALYSIS — BERT</div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    col1.metric("CLASSIFICATION", s["sentiment"])
-    col2.metric("POLARITY", s["polarity"].upper())
-    col3.metric("CONFIDENCE", s["confidence"])
-
-    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-
-    # Summary section
-    st.markdown("<div class='section-header'>// EXPLAINABLE SUMMARY — GROQ GPT-OSS</div>", unsafe_allow_html=True)
-
-    if m.get("summary"):
-        st.markdown(f"""
-        <div class='result-box green'>
-            <div class='label'>SUMMARY</div>
-            {escape(str(m['summary']))}
-        </div>""", unsafe_allow_html=True)
-
-    col_tone, col_exp = st.columns(2)
-    with col_tone:
-        if m.get("tone"):
-            st.markdown(f"""
-            <div class='result-box'>
-                <div class='label'>TONE</div>
-                {escape(str(m['tone']))}
-            </div>""", unsafe_allow_html=True)
-    with col_exp:
-        if m.get("explanation"):
-            st.markdown(f"""
-            <div class='result-box'>
-                <div class='label'>WHY</div>
-                {escape(str(m['explanation']))}
-            </div>""", unsafe_allow_html=True)
-
-    if m.get("themes"):
-        st.markdown("<div style='margin-top:0.8rem'>", unsafe_allow_html=True)
-        tags = "".join(
-            f"<span class='theme-tag'>{escape(str(theme))}</span>"
-            for theme in m["themes"]
-        )
-        st.markdown(f"""
-        <div class='result-box'>
-            <div class='label'>THEMES</div>
-            <div style='margin-top:0.3rem'>{tags}</div>
-        </div>""", unsafe_allow_html=True)
-
-elif analyze and not text.strip():
-    st.warning("⚠ No input detected.")
+        length = min(int(environ.get("CONTENT_LENGTH") or 0), 50_000)
+        text = json.loads(environ["wsgi.input"].read(length)).get("text", "").strip()
+        if not text or len(text) > 12_000:
+            return _response(start_response, "400 Bad Request", '{"error":"Enter 1–12,000 characters."}')
+        key = os.getenv("GROQ_API_KEY")
+        if not key:
+            return _response(start_response, "503 Service Unavailable",
+                             '{"error":"The demo owner still needs to configure GROQ_API_KEY in Vercel."}')
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=json.dumps({"model": os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+                             "response_format": {"type": "json_object"},
+                             "messages": [{"role": "user", "content": PROMPT + text}],
+                             "temperature": 0.2}).encode(),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=45) as upstream:
+            result = json.loads(upstream.read())
+        content = result["choices"][0]["message"]["content"]
+        return _response(start_response, "200 OK", json.dumps(json.loads(content)))
+    except (ValueError, KeyError, json.JSONDecodeError):
+        return _response(start_response, "502 Bad Gateway",
+                         '{"error":"The model returned an invalid response. Try again."}')
+    except urllib.error.HTTPError as exc:
+        return _response(start_response, "502 Bad Gateway",
+                         json.dumps({"error": f"Groq request failed ({exc.code})."}))
+    except Exception:
+        return _response(start_response, "500 Internal Server Error", '{"error":"Unexpected server error."}')
