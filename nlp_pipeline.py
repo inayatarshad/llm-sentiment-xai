@@ -15,6 +15,7 @@ load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SENTIMENT_MODEL = "nlptown/bert-base-multilingual-uncased-sentiment"
+SUMMARY_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 DEVICE          = 0 if torch.cuda.is_available() else -1   # GPU if available
 
 
@@ -43,6 +44,9 @@ class SentimentAnalyzer:
         print("✅ BERT model ready.\n")
 
     def analyze(self, text: str) -> dict:
+        text = text.strip()
+        if not text:
+            raise ValueError("Text must not be empty.")
         result    = self.pipeline(text)[0]
         label     = self.label_map.get(result["label"], result["label"])
         score     = round(result["score"] * 100, 2)
@@ -77,11 +81,16 @@ TONE: <tone>
 EXPLANATION: <why this tone>"""
 
     def __init__(self):
-        print("🔄 Loading Grok summarization model ...")
+        if not os.getenv("GROQ_API_KEY"):
+            raise RuntimeError(
+                "GROQ_API_KEY is not configured. Add it to .env or your hosting "
+                "provider's secret settings."
+            )
+        print("🔄 Loading Groq summarization model ...")
         self.llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0.3,
-)
+            model=SUMMARY_MODEL,
+            temperature=0.3,
+        )
         self.prompt = PromptTemplate(
             input_variables=["text"],
             template=self.SUMMARY_TEMPLATE,
@@ -101,6 +110,11 @@ EXPLANATION: <why this tone>"""
                 parsed["tone"] = line.replace("TONE:", "").strip()
             elif line.startswith("EXPLANATION:"):
                 parsed["explanation"] = line.replace("EXPLANATION:", "").strip()
+        if not parsed.get("summary"):
+            parsed["summary"] = raw.strip()
+        parsed.setdefault("themes", [])
+        parsed.setdefault("tone", "Not available")
+        parsed.setdefault("explanation", "The model did not return a structured explanation.")
         return parsed
 
 
@@ -111,6 +125,11 @@ class NLPPipeline:
         self.summarizer         = ExplainableSummarizer()
 
     def run(self, text: str) -> dict:
+        text = text.strip()
+        if not text:
+            raise ValueError("Text must not be empty.")
+        if len(text) > 12_000:
+            raise ValueError("Text is too long. Please keep input under 12,000 characters.")
         print("⚙️  Running full NLP pipeline...\n")
         sentiment = self.sentiment_analyzer.analyze(text)
         summary   = self.summarizer.summarize(text)

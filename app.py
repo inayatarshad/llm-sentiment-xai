@@ -3,6 +3,8 @@ Streamlit UI — Explainable NLP Pipeline
 Run: streamlit run app.py
 """
 
+from html import escape
+
 import streamlit as st
 from nlp_pipeline import NLPPipeline
 
@@ -165,20 +167,31 @@ hr {
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 st.title("NLP // CORE")
-st.caption("▸ BERT SENTIMENT  ·  GROQ LLaMA  ·  LANGCHAIN")
+st.caption("▸ BERT SENTIMENT  ·  GROQ GPT-OSS  ·  LANGCHAIN")
 
 st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
 # ── Load Pipeline ──────────────────────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def load_pipeline():
+    return NLPPipeline()
+
+
 if "pipeline" not in st.session_state:
     with st.spinner("INITIALIZING MODELS..."):
-        st.session_state.pipeline = NLPPipeline()
+        try:
+            st.session_state.pipeline = load_pipeline()
+        except Exception as exc:
+            st.error(f"Could not initialize the NLP pipeline: {exc}")
+            st.info("Configure GROQ_API_KEY, then restart the app.")
+            st.stop()
 
 # ── Input ──────────────────────────────────────────────────────────────────────
 text = st.text_area(
     "[ INPUT TEXT ]",
     height=180,
     placeholder="paste text to analyze...",
+    max_chars=12_000,
     label_visibility="visible"
 )
 
@@ -188,8 +201,12 @@ with col_btn:
 
 # ── Run & Display ──────────────────────────────────────────────────────────────
 if analyze and text.strip():
-    with st.spinner("PROCESSING..."):
-        result = st.session_state.pipeline.run(text)
+    try:
+        with st.spinner("PROCESSING..."):
+            result = st.session_state.pipeline.run(text)
+    except Exception as exc:
+        st.error(f"Analysis failed: {exc}")
+        st.stop()
 
     s = result["sentiment"]
     m = result["summary"]
@@ -204,13 +221,13 @@ if analyze and text.strip():
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
     # Summary section
-    st.markdown("<div class='section-header'>// EXPLAINABLE SUMMARY — GROQ LLaMA</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>// EXPLAINABLE SUMMARY — GROQ GPT-OSS</div>", unsafe_allow_html=True)
 
     if m.get("summary"):
         st.markdown(f"""
         <div class='result-box green'>
             <div class='label'>SUMMARY</div>
-            {m['summary']}
+            {escape(str(m['summary']))}
         </div>""", unsafe_allow_html=True)
 
     col_tone, col_exp = st.columns(2)
@@ -219,19 +236,22 @@ if analyze and text.strip():
             st.markdown(f"""
             <div class='result-box'>
                 <div class='label'>TONE</div>
-                {m['tone']}
+                {escape(str(m['tone']))}
             </div>""", unsafe_allow_html=True)
     with col_exp:
         if m.get("explanation"):
             st.markdown(f"""
             <div class='result-box'>
                 <div class='label'>WHY</div>
-                {m['explanation']}
+                {escape(str(m['explanation']))}
             </div>""", unsafe_allow_html=True)
 
     if m.get("themes"):
         st.markdown("<div style='margin-top:0.8rem'>", unsafe_allow_html=True)
-        tags = "".join(f"<span class='theme-tag'>{t}</span>" for t in m["themes"])
+        tags = "".join(
+            f"<span class='theme-tag'>{escape(str(theme))}</span>"
+            for theme in m["themes"]
+        )
         st.markdown(f"""
         <div class='result-box'>
             <div class='label'>THEMES</div>

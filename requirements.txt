@@ -1,9 +1,6 @@
-transformers
-torch
-langchain
-langchain-core
-langchain-google-genai
-google-generativeai
-streamlit
-python-dotenv
-langchain-huggingface
+transformers>=4.41,<5
+torch>=2.2,<3
+langchain-core>=0.3,<2
+langchain-groq>=0.2,<2
+streamlit>=1.35,<2
+python-dotenv>=1.0,<2

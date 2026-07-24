@@ -1,4 +1,9 @@
 sentiments/
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.vercel/
 __pycache__/
 *.pyc
+.pytest_cache/
